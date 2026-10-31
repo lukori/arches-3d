@@ -54,4 +54,6 @@ To add a room: build it in "The building", open a doorway with `archWall`, add a
 
 Lighting: Neutral tone mapping at exposure 0.85. ACES washed the pastels out to near-white.
 
+The first frame starts 5 m from the pink wall (`START_Z`, was 7), and the entrance room is 18 m wide, so its side walls don't show even on very wide screens. The entrance pink is lighter (`#f8d9d2` / `#f9d6ce`, was `#ecc3bb` / `#e9b8ae`) with a little self-light.
+
 Ceilings are tall (entrance 10 m, lavender 7.5, yellow 6.5, rainbow 5.5, end 7) so the first view doesn't show the room as a box. Shadow maps are drawn once, because nothing in the building moves. Pixel ratio is capped at 1.5 for speed. If it stutters, try `?ao=0` and then `?shadows=0`.

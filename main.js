@@ -176,7 +176,7 @@ function archLED(w, h, inset = 0.03, radius = 0.012) {
 }
 
 // ---------- The building ----------
-// Corridor runs along -Z. Viewer starts in the pink room at z = 7.
+// Corridor runs along -Z. Viewer starts in the pink room at z = 5 (START_Z).
 
 const EYE = 1.6;
 
@@ -187,9 +187,15 @@ floor.receiveShadow = true;
 scene.add(floor);
 
 // 1. Pink entrance room + pink wall with the big arch
-segment({ halfW: 6, zFront: 10, zBack: 0, H: 10, color: '#ecc3bb' });
-box(12.4, 10, 0.2, mat('#ecc3bb'), 0, 5, 10.1);
-addWall(0, { W: 12, H: 10, w: 3.4, h: 4.2, depth: 0.5, color: '#e9b8ae', reveal: '#dfa79e' });
+// Wide (±9) so its side walls stay out of the first frame even on very wide screens
+{
+  const pink = mat('#f8d9d2', { emissive: '#f8d9d2', emissiveIntensity: 0.15 });   // a little self-light keeps it light, not dusky
+  segment({ halfW: 9, zFront: 10, zBack: 0, H: 10, color: '#f8d9d2' });
+  box(18.4, 10, 0.2, pink, 0, 5, 10.1);
+  const wallA = addWall(0, { W: 18, H: 10, w: 3.4, h: 4.2, depth: 0.5, color: '#f9d6ce', reveal: '#f0c2b8' });
+  wallA.material[0].emissive.set('#f9d6ce');
+  wallA.material[0].emissiveIntensity = 0.15;
+}
 
 // 2. Lavender hall, with a doorway on the right into the yellow room
 segment({ halfW: 2.2, zFront: -0.5, zBack: -4, H: 7.5, color: '#d2c6d9', open: { right: true } });
@@ -287,8 +293,9 @@ roomLight('#ffffff', 30, 5.4, 6.5, -2.25);                    // pink side room
 // is squeezed into a short stretch (grayHold), so small steps there barely move you while you turn your head.
 // Looking right in that hall switches to the branch into the yellow room; stepping back out of the hall returns.
 
-const CORRIDOR_LEN = 7 - (END_Z - 0.6);    // from z = 7 to just inside the end room
-const GRAY_FROM = 8.4, GRAY_TO = 10.1;     // corridor distance of the slow stretch (z -1.4 … -3.1), around the door at z -2.25
+const START_Z = 5;                         // first frame: close enough that the entrance room's side walls are out of view
+const CORRIDOR_LEN = START_Z - (END_Z - 0.6);   // to just inside the end room
+const GRAY_FROM = START_Z + 1.4, GRAY_TO = START_Z + 3.1;   // corridor distance of the slow stretch (z -1.4 … -3.1), around the door at z -2.25
 const BRANCH = new THREE.CatmullRomCurve3(
   [[0, -0.4], [0, -1.4], [1.0, -2.25], [2.8, -2.25], [5.0, -2.25]].map(([x, z]) => new THREE.Vector3(x, EYE, z)),
   false, 'centripetal');
@@ -313,7 +320,7 @@ function corridorDistance(t) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
-const wantPos = new THREE.Vector3(0, EYE, 7), wantDir = new THREE.Vector3(0, 0, -1);
+const wantPos = new THREE.Vector3(0, EYE, START_Z), wantDir = new THREE.Vector3(0, 0, -1);
 const camDir = new THREE.Vector3(0, 0, -1), lookTarget = new THREE.Vector3();
 camera.position.copy(wantPos);
 
@@ -324,7 +331,7 @@ function placeCamera(t) {
     BRANCH.getPointAt(u, wantPos);
     BRANCH.getTangentAt(Math.min(u, 0.999), wantDir);
   } else {
-    wantPos.set(0, EYE, 7 - corridorDistance(t));
+    wantPos.set(0, EYE, START_Z - corridorDistance(t));
     wantDir.set(0, 0, -1);
     // In the gray hall the view turns a little with your head, so you see the doorway as you look at it
     if (inGray && headYaw !== null) {
