@@ -245,7 +245,7 @@ box(5.6, 7, 0.2, mat('#f2cdc6'), 0, 3.5, END_Z - 5.1);
   tex.colorSpace = THREE.SRGBColorSpace;
   const H = 2.6, W = H * 839 / 1024;           // hamsa.png is 839×1024
   const hamsa = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
-    mat('#ffffff', { map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.3, alphaTest: 0.5 }));
+    mat('#ffffff', { map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.2, alphaTest: 0.5 }));
   hamsa.rotation.y = -Math.PI / 2;
   hamsa.position.set(8.39, 0.5 + H / 2, -2.25);
   scene.add(hamsa);
