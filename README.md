@@ -37,5 +37,9 @@ Choosing the route live (e.g. leaning left/right) isn't built yet.
 | `baselineFrames` | 30 | same as the 2D piece |
 | `fov` | 60 | |
 | `bloom` | 0.45 | soft glow on the light strips |
+| `ao` | 1 | soft contact shading in corners and inside the arches (0 = off) |
+| `shadows` | 1 | each room has one light high up that casts shadows (0 = off, faster). Read at load |
 
 Lighting: Neutral tone mapping at exposure 0.85. ACES washed the pastels out to near-white.
+
+Ceilings are tall (entrance 10 m, lavender 7.5, yellow 6.5, rainbow 5.5, end 7) so the first view doesn't show the room as a box. Shadow maps are drawn once, because nothing in the building moves. Pixel ratio is capped at 1.5 for speed. If it stutters, try `?ao=0` and then `?shadows=0`.

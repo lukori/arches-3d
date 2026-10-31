@@ -4,6 +4,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 
 // ---------- Parameters (tunable from the URL and the ?debug overlay) ----------
 
@@ -14,6 +15,8 @@ const DEFAULT_PARAMS = {
   baselineFrames: 30,  // frames before the baseline is taken
   fov: 60,
   bloom: 0.45,
+  ao: 1,               // soft contact shading in corners and under arches (0 = off)
+  shadows: 1,          // 1 = lights cast shadows, 0 = off (faster)
 };
 const LIMITS = {
   range: [0.1, 2, 0.05],
@@ -22,6 +25,8 @@ const LIMITS = {
   baselineFrames: [5, 120, 5],
   fov: [30, 100, 5],
   bloom: [0, 2, 0.05],
+  ao: [0, 1, 0.1],
+  shadows: [0, 1, 1],
 };
 
 const query = new URLSearchParams(location.search);
@@ -41,10 +46,14 @@ function clampParam(k, v) {
 // ---------- Renderer, scene, camera ----------
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 0.85;
+renderer.shadowMap.enabled = params.shadows > 0;   // read once at load
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;   // the building never moves, so shadows are drawn once
+renderer.shadowMap.needsUpdate = true;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -57,6 +66,10 @@ const camera = new THREE.PerspectiveCamera(params.fov, innerWidth / innerHeight,
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
+const aoPass = new GTAOPass(scene, camera, innerWidth, innerHeight);
+aoPass.blendIntensity = params.ao;
+aoPass.enabled = params.ao > 0;
+composer.addPass(aoPass);
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), params.bloom, 0.6, 0.9);
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
@@ -69,6 +82,7 @@ const ledMat = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ff
 function box(w, h, d, material, x, y, z) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   m.position.set(x, y, z);
+  m.castShadow = m.receiveShadow = true;
   scene.add(m);
   return m;
 }
@@ -102,7 +116,9 @@ function archShape(w, h) {
 // Material 0 = front/back faces, material 1 = the reveal (inside of the opening)
 function archWall({ W, H, w, h, depth, color, reveal = color }) {
   const geo = new THREE.ExtrudeGeometry(wallShape(W, H, w, h), { depth, bevelEnabled: false, curveSegments: 48 });
-  return new THREE.Mesh(geo, [mat(color), mat(reveal)]);
+  const m = new THREE.Mesh(geo, [mat(color), mat(reveal)]);
+  m.castShadow = m.receiveShadow = true;
+  return m;
 }
 
 // Arch wall across the corridor with its front face at z
@@ -149,24 +165,25 @@ const EYE = 1.6;
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), mat('#e49a78', { roughness: 0.35 }));
 floor.rotation.x = -Math.PI / 2;
 floor.position.z = -12;
+floor.receiveShadow = true;
 scene.add(floor);
 
 // 1. Pink entrance room + pink wall with the big arch
-segment({ halfW: 6, zFront: 10, zBack: 0, H: 6, color: '#ecc3bb' });
-box(12.4, 6, 0.2, mat('#ecc3bb'), 0, 3, 10.1);
-addWall(0, { W: 12, H: 6, w: 3.4, h: 4.2, depth: 0.5, color: '#e9b8ae', reveal: '#dfa79e' });
+segment({ halfW: 6, zFront: 10, zBack: 0, H: 10, color: '#ecc3bb' });
+box(12.4, 10, 0.2, mat('#ecc3bb'), 0, 5, 10.1);
+addWall(0, { W: 12, H: 10, w: 3.4, h: 4.2, depth: 0.5, color: '#e9b8ae', reveal: '#dfa79e' });
 
 // 2. Lavender hall, with a doorway on the right into the yellow room
-segment({ halfW: 2.2, zFront: -0.5, zBack: -4, H: 4.4, color: '#d2c6d9', open: { right: true } });
-const sideWall = archWall({ W: 3.5, H: 4.4, w: 1.6, h: 2.7, depth: 0.2, color: '#d2c6d9', reveal: '#c2bdd6' });
+segment({ halfW: 2.2, zFront: -0.5, zBack: -4, H: 7.5, color: '#d2c6d9', open: { right: true } });
+const sideWall = archWall({ W: 3.5, H: 7.5, w: 1.6, h: 2.7, depth: 0.2, color: '#d2c6d9', reveal: '#c2bdd6' });
 sideWall.rotation.y = -Math.PI / 2;   // local x → world z, extrusion → world -x
 sideWall.position.set(2.4, 0, -2.25);
 scene.add(sideWall);
-addWall(-4, { W: 4.4, H: 4.4, w: 2.6, h: 3.6, depth: 0.35, color: '#cdc1d6', reveal: '#bdbcd3' });
+addWall(-4, { W: 4.4, H: 7.5, w: 2.6, h: 3.6, depth: 0.35, color: '#cdc1d6', reveal: '#bdbcd3' });
 
 // 3. Yellow hall + thick yellow arch with a glowing edge
-segment({ halfW: 2.0, zFront: -4.35, zBack: -7, H: 3.9, color: '#f3d56b' });
-addWall(-7, { W: 4, H: 3.9, w: 2.2, h: 3.1, depth: 0.6, color: '#f3d56b', reveal: '#f1b52e' });
+segment({ halfW: 2.0, zFront: -4.35, zBack: -7, H: 6.5, color: '#f3d56b' });
+addWall(-7, { W: 4, H: 6.5, w: 2.2, h: 3.1, depth: 0.6, color: '#f3d56b', reveal: '#f1b52e' });
 const ledC = archLED(2.2, 3.1);
 ledC.position.z = -6.99;
 scene.add(ledC);
@@ -177,24 +194,24 @@ const RING_COLORS = ['#e8361f', '#1d4a73', '#f4d9da', '#b8d4ec', '#f3c22e', '#e8
 const RING_START = -7.8, SPACING = 0.95, RING_D = 0.28;
 RING_COLORS.forEach((c, i) => {
   const z = RING_START - i * SPACING;
-  addWall(z, { W: 2.8, H: 3.3, w: 1.9, h: 2.75, depth: RING_D, color: c });
+  addWall(z, { W: 2.8, H: 5.5, w: 1.9, h: 2.75, depth: RING_D, color: c });
   box(1.9, 0.004, 0.03, ledMat, 0, 0.002, z + 0.06);
 });
 const END_Z = RING_START - (RING_COLORS.length - 1) * SPACING - RING_D;
-segment({ halfW: 1.4, zFront: -7.6, zBack: END_Z, H: 3.3, color: '#f6e4de' });
+segment({ halfW: 1.4, zFront: -7.6, zBack: END_Z, H: 5.5, color: '#f6e4de' });
 
 // 5. Soft pink room at the end
-addWall(END_Z, { W: 5.2, H: 4.2, w: 1.9, h: 2.75, depth: 0.1, color: '#f4d2cc' });
-segment({ halfW: 2.6, zFront: END_Z - 0.1, zBack: END_Z - 5, H: 4.2, color: '#f4d2cc' });
-box(5.6, 4.2, 0.2, mat('#f7dcd7', { emissive: '#f7d6d0', emissiveIntensity: 0.5 }), 0, 2.1, END_Z - 5.1);
+addWall(END_Z, { W: 5.2, H: 7, w: 1.9, h: 2.75, depth: 0.1, color: '#f4d2cc' });
+segment({ halfW: 2.6, zFront: END_Z - 0.1, zBack: END_Z - 5, H: 7, color: '#f4d2cc' });
+box(5.6, 7, 0.2, mat('#f7dcd7', { emissive: '#f7d6d0', emissiveIntensity: 0.5 }), 0, 3.5, END_Z - 5.1);
 
 // 6. Yellow side room (through the doorway on the right of the lavender hall)
 {
   const m = mat('#f4d35e');
-  box(6.2, 4.4, 0.2, m, 5.4, 2.2, -0.5);    // near wall
-  box(6.2, 4.4, 0.2, m, 5.4, 2.2, -4.0);    // far wall
-  box(0.2, 4.4, 3.7, m, 8.5, 2.2, -2.25);   // end wall
-  box(6.2, 0.2, 3.7, m, 5.4, 4.5, -2.25);   // ceiling
+  box(6.2, 7.5, 0.2, m, 5.4, 3.75, -0.5);   // near wall
+  box(6.2, 7.5, 0.2, m, 5.4, 3.75, -4.0);   // far wall
+  box(0.2, 7.5, 3.7, m, 8.5, 3.75, -2.25);  // end wall
+  box(6.2, 0.2, 3.7, m, 5.4, 7.6, -2.25);   // ceiling
   const glow = new THREE.Mesh(new THREE.ShapeGeometry(archShape(1.8, 3.0), 32),
     mat('#ffffff', { emissive: '#fff6dc', emissiveIntensity: 1.6 }));
   glow.rotation.y = -Math.PI / 2;
@@ -211,15 +228,27 @@ scene.add(new THREE.HemisphereLight('#fff6ee', '#e6a585', 0.6));
 const sun = new THREE.DirectionalLight('#fff1e0', 0.7);
 sun.position.set(3, 8, 10);
 scene.add(sun);
-const endLight = new THREE.PointLight('#ffd9d2', 25, 0, 2);
-endLight.position.set(0, 3, END_Z - 2.5);
-scene.add(endLight);
-const corridorLight = new THREE.PointLight('#fff4ea', 6, 0, 2);
-corridorLight.position.set(0, 3, (RING_START + END_Z) / 2);
-scene.add(corridorLight);
-const yellowLight = new THREE.PointLight('#fff0c0', 15, 0, 2);
-yellowLight.position.set(5.4, 3.5, -2.25);
-scene.add(yellowLight);
+// One shadow-casting light per room, up near the ceiling
+function roomLight(color, intensity, x, y, z, shadow = true) {
+  const l = new THREE.PointLight(color, intensity, 0, 2);
+  l.position.set(x, y, z);
+  if (shadow) {
+    l.castShadow = true;
+    l.shadow.mapSize.set(1024, 1024);
+    l.shadow.bias = -0.002;
+    l.shadow.radius = 4;
+    l.shadow.camera.near = 0.1;
+    l.shadow.camera.far = 30;
+  }
+  scene.add(l);
+  return l;
+}
+roomLight('#fff1e4', 60, 0, 8.5, 8);                          // entrance room, behind the viewer
+roomLight('#f3eaff', 14, 0, 6.5, -2.2);                       // lavender hall
+roomLight('#fff3d0', 14, 0, 5.6, -5.6);                       // yellow hall
+roomLight('#fff4ea', 6, 0, 4.5, (RING_START + END_Z) / 2, false); // rainbow corridor fill
+roomLight('#ffd9d2', 30, 0, 5.5, END_Z - 2.5);                // end room
+roomLight('#fff0c0', 20, 5.4, 6.5, -2.25);                    // yellow room
 
 // ---------- Camera paths ----------
 // A route is a list of [x, z] points at eye height. Add a new route to walk into another room.
@@ -363,6 +392,7 @@ function setParam(k, v) {
   params[k] = clampParam(k, +v.toFixed(3));
   if (k === 'fov') { camera.fov = params.fov; camera.updateProjectionMatrix(); }
   if (k === 'bloom') bloomPass.strength = params.bloom;
+  if (k === 'ao') { aoPass.blendIntensity = params.ao; aoPass.enabled = params.ao > 0; }
   const q = new URLSearchParams(location.search);
   for (const p in params) {
     if (params[p] !== DEFAULT_PARAMS[p]) q.set(p, params[p]);
