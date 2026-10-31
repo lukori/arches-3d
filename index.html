@@ -18,6 +18,19 @@
   #debug button { font: inherit; min-width: 26px; padding: 1px 6px; cursor: pointer; }
   #debug .btns { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
 </style>
+<script>
+  // With ?debug, show load errors on screen (they happen before main.js can draw its own overlay)
+  if (location.search.includes('debug')) {
+    const show = msg => {
+      const el = document.createElement('pre');
+      el.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;z-index:20;background:#300;color:#fff;padding:8px;white-space:pre-wrap;font:12px monospace';
+      el.textContent = 'error: ' + msg;
+      document.body.appendChild(el);
+    };
+    addEventListener('error', e => show(e.message + (e.filename ? `  (${e.filename.split('/').pop()}:${e.lineno})` : '')));
+    addEventListener('unhandledrejection', e => show(String(e.reason)));
+  }
+</script>
 <script type="importmap">
 {
   "imports": {
@@ -28,6 +41,6 @@
 </script>
 </head>
 <body>
-<script type="module" src="main.js?v=4"></script>
+<script type="module" src="main.js?v=5"></script>
 </body>
 </html>

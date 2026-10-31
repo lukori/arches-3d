@@ -45,7 +45,15 @@ function clampParam(k, v) {
 
 // ---------- Renderer, scene, camera ----------
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+} catch (err) {
+  // The browser couldn't give us 3D graphics (e.g. too many 3D tabs open, or its graphics process crashed)
+  document.body.innerHTML = '<p style="font:16px/1.5 system-ui;color:#7a4b3a;text-align:center;margin-top:40vh">' +
+    'This browser couldn\'t start 3D graphics (WebGL).<br>Close other 3D tabs or restart the browser, then reload.</p>';
+  throw err;
+}
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.NeutralToneMapping;
