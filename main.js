@@ -17,6 +17,11 @@ const DEFAULT_PARAMS = {
   bloom: 0.45,
   ao: 1,               // soft contact shading in corners and under arches (0 = off)
   shadows: 1,          // 1 = lights cast shadows, 0 = off (faster)
+  grayHold: 0.3,       // share of the walk spent in the lavender (gray) hall, so stepping there barely moves you
+  turnAngle: 25,       // degrees of head turn to the right that count as "looking at the door"
+  holdTime: 0.5,       // seconds the head must stay turned before you go in
+  lookFollow: 0.5,     // in the gray hall the view turns this much with your head (0 = not at all)
+  turnSign: 1,         // flip to -1 if looking right is read as looking left
 };
 const LIMITS = {
   range: [0.1, 2, 0.05],
@@ -27,6 +32,11 @@ const LIMITS = {
   bloom: [0, 2, 0.05],
   ao: [0, 1, 0.1],
   shadows: [0, 1, 1],
+  grayHold: [0, 0.6, 0.05],
+  turnAngle: [5, 60, 5],
+  holdTime: [0, 2, 0.1],
+  lookFollow: [0, 1, 0.1],
+  turnSign: [-1, 1, 2],
 };
 
 const query = new URLSearchParams(location.search);
@@ -269,21 +279,59 @@ roomLight('#ffd9d2', 30, 0, 5.5, END_Z - 2.5);                // end room
 roomLight('#fff0c0', 20, 5.4, 6.5, -2.25);                    // yellow room
 
 // ---------- Camera paths ----------
-// A route is a list of [x, z] points at eye height. Add a new route to walk into another room.
+// The walk (0–1) moves straight down the corridor. In the lavender (gray) hall a wide part of the walk
+// is squeezed into a short stretch (grayHold), so small steps there barely move you while you turn your head.
+// Looking right in that hall switches to the branch into the yellow room; stepping back out of the hall returns.
 
-const ROUTES = {
-  main: [[0, 7], [0, 0], [0, END_Z - 0.6]],
-  yellow: [[0, 7], [0, 1], [0, -1.4], [1.0, -2.25], [2.8, -2.25], [5.0, -2.25]],
-};
-const path = new THREE.CatmullRomCurve3(
-  (ROUTES[ROUTE] || ROUTES.main).map(([x, z]) => new THREE.Vector3(x, EYE, z)), false, 'centripetal');
+const CORRIDOR_LEN = 7 - (END_Z - 0.6);    // from z = 7 to just inside the end room
+const GRAY_FROM = 8.4, GRAY_TO = 10.1;     // corridor distance of the slow stretch (z -1.4 … -3.1), around the door at z -2.25
+const BRANCH = new THREE.CatmullRomCurve3(
+  [[0, -0.4], [0, -1.4], [1.0, -2.25], [2.8, -2.25], [5.0, -2.25]].map(([x, z]) => new THREE.Vector3(x, EYE, z)),
+  false, 'centripetal');
+let BRANCH_START = 0;                      // where the branch passes z = -1.4 (start of the slow stretch)
+for (let i = 0, best = Infinity; i <= 200; i++) {
+  const dist = BRANCH.getPointAt(i / 200).distanceTo(new THREE.Vector3(0, EYE, -1.4));
+  if (dist < best) { best = dist; BRANCH_START = i / 200; }
+}
 
-const lookTarget = new THREE.Vector3();
-function placeCamera(u) {
-  const pos = path.getPointAt(u);
-  const dir = path.getTangentAt(Math.min(u, 0.999));
-  camera.position.copy(pos);
-  camera.lookAt(lookTarget.copy(pos).add(dir));
+// Walk values where the slow stretch begins and ends
+function grayBand() {
+  const outside = CORRIDOR_LEN - (GRAY_TO - GRAY_FROM);
+  const tA = GRAY_FROM / outside * (1 - params.grayHold);
+  return [tA, tA + params.grayHold];
+}
+
+function corridorDistance(t) {
+  const [tA, tB] = grayBand();
+  if (t < tA) return t / tA * GRAY_FROM;
+  if (t < tB) return GRAY_FROM + (t - tA) / (tB - tA) * (GRAY_TO - GRAY_FROM);
+  return GRAY_TO + (t - tB) / (1 - tB) * (CORRIDOR_LEN - GRAY_TO);
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+const wantPos = new THREE.Vector3(0, EYE, 7), wantDir = new THREE.Vector3(0, 0, -1);
+const camDir = new THREE.Vector3(0, 0, -1), lookTarget = new THREE.Vector3();
+camera.position.copy(wantPos);
+
+function placeCamera(t) {
+  const [tA] = grayBand();
+  if (inYellow) {
+    const u = BRANCH_START + THREE.MathUtils.clamp((t - tA) / (1 - tA), 0, 1) * (1 - BRANCH_START);
+    BRANCH.getPointAt(u, wantPos);
+    BRANCH.getTangentAt(Math.min(u, 0.999), wantDir);
+  } else {
+    wantPos.set(0, EYE, 7 - corridorDistance(t));
+    wantDir.set(0, 0, -1);
+    // In the gray hall the view turns a little with your head, so you see the doorway as you look at it
+    if (inGray && headYaw !== null) {
+      const yaw = THREE.MathUtils.clamp(headYaw, -45, 45) * params.lookFollow;
+      wantDir.applyAxisAngle(UP, -THREE.MathUtils.degToRad(yaw));
+    }
+  }
+  // Ease position and direction, so switching rooms glides instead of jumping
+  camera.position.lerp(wantPos, 0.25);
+  camDir.lerp(wantDir, 0.1).normalize();
+  camera.lookAt(lookTarget.copy(camera.position).add(camDir));
 }
 
 // ---------- Webcam silhouette (same logic as the 2D piece) ----------
@@ -298,10 +346,11 @@ const sctx = sil.getContext('2d', { willReadFrequently: true });
 
 let camOn = false, camStart = 0, frames = 0, baseline = null, size = 0;
 let target = 0, progress = 0, manual = 0;
+let inYellow = false, inGray = false, held = 0;   // held = seconds the head has stayed turned right
 
 navigator.mediaDevices?.getUserMedia({ video: { width: 640, height: 480 } })
   .then(stream => { video.srcObject = stream; return video.play(); })
-  .then(() => { camOn = true; camStart = performance.now(); })
+  .then(() => { camOn = true; camStart = performance.now(); loadFaceTracking(); })
   .catch(err => console.warn('Camera unavailable, use scroll / arrow keys:', err));
 
 function silhouetteSize() {
@@ -318,7 +367,41 @@ function silhouetteSize() {
   return black;
 }
 
-function update() {
+// ---------- Head turn (MediaPipe face landmarks) ----------
+// Loaded on demand; if it fails, the piece still works, just without the turn.
+
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/';
+const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+let face = null, faceStatus = 'off', headYaw = null, manualYaw = 0, lastFaceT = 0;
+
+async function loadFaceTracking() {
+  faceStatus = 'loading';
+  try {
+    const { FaceLandmarker, FilesetResolver } = await import(MP + 'vision_bundle.mjs');
+    const files = await FilesetResolver.forVisionTasks(MP + 'wasm');
+    const opts = delegate => ({
+      baseOptions: { modelAssetPath: FACE_MODEL, delegate },
+      runningMode: 'VIDEO', numFaces: 1, outputFacialTransformationMatrixes: true,
+    });
+    try { face = await FaceLandmarker.createFromOptions(files, opts('GPU')); }
+    catch { face = await FaceLandmarker.createFromOptions(files, opts('CPU')); }
+    faceStatus = 'on';
+  } catch (err) {
+    faceStatus = 'failed';
+    console.warn('Head tracking unavailable:', err);
+  }
+}
+
+// Degrees; positive = looking to your right
+function trackHead(now) {
+  if (!camOn) { headYaw = manualYaw; return; }
+  if (!face || video.readyState < 2 || now - lastFaceT < 100) return;   // ~10 checks a second is plenty for a 0.5 s hold
+  lastFaceT = now;
+  const m = face.detectForVideo(video, now).facialTransformationMatrixes?.[0];
+  headYaw = m ? params.turnSign * -THREE.MathUtils.radToDeg(Math.atan2(m.data[8], m.data[10])) : null;
+}
+
+function update(now, dt) {
   if (camOn && video.readyState >= 2) {
     size = silhouetteSize();
     // Count baseline frames only after the camera's first second, while its auto-exposure settles
@@ -332,6 +415,18 @@ function update() {
     target = manual;
   }
   progress += (target - progress) * params.smoothing;
+
+  const [tA, tB] = grayBand();
+  inGray = !inYellow && progress >= tA && progress <= tB;
+  if (inGray) trackHead(now);   // only where it's needed: face detection is the heaviest part
+  if (inGray && headYaw !== null && headYaw > params.turnAngle) {
+    held += dt;
+    if (held >= params.holdTime) inYellow = true;
+  } else {
+    held = 0;
+  }
+  if (ROUTE === 'yellow' && progress >= tA) inYellow = true;   // ?route=yellow: go in without the head turn
+  if (inYellow && progress < tA) inYellow = false;              // stepped back out of the gray hall
 }
 
 function resetBaseline() {
@@ -345,9 +440,12 @@ addEventListener('wheel', e => { manual = THREE.MathUtils.clamp(manual + e.delta
 addEventListener('keydown', e => {
   if (e.key === 'ArrowUp') manual = Math.min(1, manual + 0.05);
   if (e.key === 'ArrowDown') manual = Math.max(0, manual - 0.05);
+  if (e.key === 'ArrowRight') manualYaw = 40;   // without a camera: hold → to "look right"
+  if (e.key === 'ArrowLeft') manualYaw = -40;
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
   if (e.key === 'r' || e.key === 'R') resetBaseline();
 });
+addEventListener('keyup', e => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') manualYaw = 0; });
 renderer.domElement.addEventListener('click', toggleFullscreen);
 
 function toggleFullscreen() {
@@ -407,7 +505,8 @@ if (DEBUG) {
   document.body.appendChild(el);
 
   setInterval(() => {
-    log.push({ t: +(performance.now() / 1000).toFixed(2), size, baseline, target: +target.toFixed(3), progress: +progress.toFixed(3) });
+    log.push({ t: +(performance.now() / 1000).toFixed(2), size, baseline, target: +target.toFixed(3), progress: +progress.toFixed(3),
+      yaw: headYaw === null ? null : +headYaw.toFixed(1), room: inYellow ? 'yellow' : inGray ? 'gray' : 'corridor' });
     if (log.length > 2400) log.shift();
   }, 250);
 }
@@ -427,22 +526,25 @@ function setParam(k, v) {
 
 function logText() {
   return `arches-3d log  params=${JSON.stringify(params)}  route=${ROUTE}\n` +
-    log.map(s => `${s.t}s  size=${s.size}  base=${s.baseline}  target=${s.target}  progress=${s.progress}`).join('\n');
+    log.map(s => `${s.t}s  size=${s.size}  base=${s.baseline}  target=${s.target}  progress=${s.progress}  yaw=${s.yaw}  room=${s.room}`).join('\n');
 }
 
 // ---------- Loop ----------
 
 function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000);
   fps = fps * 0.9 + (1000 / Math.max(1, now - lastT)) * 0.1;
   lastT = now;
-  update();
+  update(now, dt);
   placeCamera(progress);
   composer.render();
   if (statsEl) {
     statsEl.innerHTML =
       `fps ${fps.toFixed(0)} · ${camOn ? 'camera' : 'scroll/arrows'}<br>` +
       `silhouette ${size}<br>baseline ${baseline ?? 'calculating…'}<br>` +
-      `target ${target.toFixed(2)} · walk ${progress.toFixed(2)}<br>route ${ROUTE}` +
+      `target ${target.toFixed(2)} · walk ${progress.toFixed(2)}<br>` +
+      `head ${faceStatus} · yaw ${headYaw === null ? '–' : headYaw.toFixed(0) + '°'} · held ${held.toFixed(1)}s<br>` +
+      `room ${inYellow ? 'yellow' : inGray ? 'GRAY (look right)' : 'corridor'}` +
       (lastError ? `<br>error: ${lastError}` : '');
   }
   requestAnimationFrame(frame);

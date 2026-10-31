@@ -12,15 +12,19 @@ Live: https://lukori.github.io/arches-3d/
 - The camera follows a **route**: a list of `[x, z]` points in `ROUTES` in `main.js`. The walk position (0–1) is a point along that route, and the camera looks where the route is heading.
 - Without a camera, scroll or the ↑/↓ keys walk the route.
 
-## Rooms and routes
+## Rooms and the head turn
 
-| Route | URL | Path |
-|---|---|---|
-| `main` | `?` (default) | straight through all the arches into the pink room |
-| `yellow` | `?route=yellow` | turns right in the lavender hall, through a side door into the yellow room |
+- The walk goes straight down the corridor into the pink end room.
+- **Gray (lavender) hall = slow zone.** `grayHold` (0.3) of the whole walk is squeezed into the 1.7 m around the side door, so stepping forward or back there barely moves you while you turn your head. Natural share would be about 0.07.
+- **Look right to go in.** In the gray hall a face tracker (MediaPipe Face Landmarker, loaded after the camera starts) measures head turn. Turned right more than `turnAngle` (25°) for `holdTime` (0.5 s) switches to the branch into the yellow room. Walking closer then moves you into the room.
+- While you're in the gray hall the view turns a little with your head (`lookFollow` 0.5), so you see the doorway as you look at it.
+- Stepping back out of the gray hall (toward the entrance) returns to the corridor.
+- Face detection only runs in the gray hall, about 10 times a second. It's the heaviest part, so check fps there in `?debug`.
+- If looking right is read as left, set `turnSign` to -1.
+- Without a camera: ↑/↓ walk, hold → to "look right".
+- `?route=yellow` goes into the yellow room without the head turn (for testing).
 
-To add a room: build it in the "The building" section, open a doorway with `archWall`, and add a route.
-Choosing the route live (e.g. leaning left/right) isn't built yet.
+To add a room: build it in "The building", open a doorway with `archWall`, add a branch curve, and decide what switches to it.
 
 ## Controls
 
@@ -40,6 +44,11 @@ Choosing the route live (e.g. leaning left/right) isn't built yet.
 | `bloom` | 0.45 | soft glow on the light strips |
 | `ao` | 1 | soft contact shading in corners and inside the arches (0 = off) |
 | `shadows` | 1 | each room has one light high up that casts shadows (0 = off, faster). Read at load |
+| `grayHold` | 0.3 | share of the walk spent in the gray hall (slow zone) |
+| `turnAngle` | 25 | degrees of head turn right that count |
+| `holdTime` | 0.5 | seconds to hold the turn, so a quick glance doesn't trigger it |
+| `lookFollow` | 0.5 | how much the view follows your head in the gray hall |
+| `turnSign` | 1 | -1 flips left/right |
 
 Lighting: Neutral tone mapping at exposure 0.85. ACES washed the pastels out to near-white.
 
