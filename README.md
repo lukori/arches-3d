@@ -6,6 +6,7 @@ Live: https://lukori.github.io/arches-3d/
 
 ## How it works
 
+- The baseline frames only start counting after the camera's first second, so the baseline isn't taken while the Mac camera is still adjusting brightness. A too-low baseline sent the walk straight to the end.
 - Silhouette logic is the same as the 2D piece. The webcam is shrunk to 160×120 and thresholded, then the black pixels are counted. After 30 frames that count becomes the baseline.
 - How far you walk = (silhouette − baseline) / (baseline × `range`), from 0 to 1, eased by `smoothing` each frame. With `range` 0.5 you reach the end at 1.5× the baseline, the same as the 2D zoom reaching 10×.
 - The camera follows a **route**: a list of `[x, z]` points in `ROUTES` in `main.js`. The walk position (0–1) is a point along that route, and the camera looks where the route is heading.

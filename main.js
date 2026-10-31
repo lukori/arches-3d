@@ -203,7 +203,17 @@ segment({ halfW: 1.4, zFront: -7.6, zBack: END_Z, H: 5.5, color: '#f6e4de' });
 // 5. Soft pink room at the end
 addWall(END_Z, { W: 5.2, H: 7, w: 1.9, h: 2.75, depth: 0.1, color: '#f4d2cc' });
 segment({ halfW: 2.6, zFront: END_Z - 0.1, zBack: END_Z - 5, H: 7, color: '#f4d2cc' });
-box(5.6, 7, 0.2, mat('#f7dcd7', { emissive: '#f7d6d0', emissiveIntensity: 0.5 }), 0, 3.5, END_Z - 5.1);
+box(5.6, 7, 0.2, mat('#f2cdc6'), 0, 3.5, END_Z - 5.1);
+{
+  // Glowing arch on the end wall, so the end of the walk has something to look at
+  const glow = new THREE.Mesh(new THREE.ShapeGeometry(archShape(1.6, 2.8), 32),
+    mat('#ffffff', { emissive: '#ffe9e4', emissiveIntensity: 1.6 }));
+  glow.position.z = END_Z - 4.99;
+  scene.add(glow);
+  const led = archLED(1.6, 2.8);
+  led.position.z = END_Z - 4.98;
+  scene.add(led);
+}
 
 // 6. Yellow side room (through the doorway on the right of the lavender hall)
 {
@@ -254,7 +264,7 @@ roomLight('#fff0c0', 20, 5.4, 6.5, -2.25);                    // yellow room
 // A route is a list of [x, z] points at eye height. Add a new route to walk into another room.
 
 const ROUTES = {
-  main: [[0, 7], [0, 0], [0, END_Z - 1.2]],
+  main: [[0, 7], [0, 0], [0, END_Z - 0.6]],
   yellow: [[0, 7], [0, 1], [0, -1.4], [1.0, -2.25], [2.8, -2.25], [5.0, -2.25]],
 };
 const path = new THREE.CatmullRomCurve3(
@@ -303,7 +313,8 @@ function silhouetteSize() {
 function update() {
   if (camOn && video.readyState >= 2) {
     size = silhouetteSize();
-    if (frames < params.baselineFrames) frames++;
+    // Count baseline frames only after the camera's first second, while its auto-exposure settles
+    if (frames < params.baselineFrames) { if (video.currentTime > 1) frames++; }
     else if (baseline === null) baseline = size;
     if (baseline) {
       target = size > baseline ? Math.min(1, (size - baseline) / (baseline * params.range)) : 0;
