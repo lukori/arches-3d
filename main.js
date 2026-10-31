@@ -288,12 +288,12 @@ sil.width = 160;
 sil.height = 120;
 const sctx = sil.getContext('2d', { willReadFrequently: true });
 
-let camOn = false, frames = 0, baseline = null, size = 0;
+let camOn = false, camStart = 0, frames = 0, baseline = null, size = 0;
 let target = 0, progress = 0, manual = 0;
 
 navigator.mediaDevices?.getUserMedia({ video: { width: 640, height: 480 } })
   .then(stream => { video.srcObject = stream; return video.play(); })
-  .then(() => { camOn = true; })
+  .then(() => { camOn = true; camStart = performance.now(); })
   .catch(err => console.warn('Camera unavailable, use scroll / arrow keys:', err));
 
 function silhouetteSize() {
@@ -314,7 +314,8 @@ function update() {
   if (camOn && video.readyState >= 2) {
     size = silhouetteSize();
     // Count baseline frames only after the camera's first second, while its auto-exposure settles
-    if (frames < params.baselineFrames) { if (video.currentTime > 1) frames++; }
+    // (a wall-clock timer, not video.currentTime, which Firefox doesn't advance the same way for live cameras)
+    if (frames < params.baselineFrames) { if (performance.now() - camStart > 1000) frames++; }
     else if (baseline === null) baseline = size;
     if (baseline) {
       target = size > baseline ? Math.min(1, (size - baseline) / (baseline * params.range)) : 0;
@@ -328,6 +329,7 @@ function update() {
 function resetBaseline() {
   frames = 0;
   baseline = null;
+  camStart = performance.now();
 }
 
 // Fallback without a camera: scroll or arrow keys walk the path
@@ -355,6 +357,9 @@ addEventListener('resize', () => {
 // ---------- Debug overlay (?debug) ----------
 
 let statsEl = null, fps = 0, lastT = performance.now();
+let lastError = '';
+addEventListener('error', e => { lastError = e.message; });
+addEventListener('unhandledrejection', e => { lastError = String(e.reason); });
 const log = [];
 
 if (DEBUG) {
@@ -429,7 +434,8 @@ function frame(now) {
     statsEl.innerHTML =
       `fps ${fps.toFixed(0)} · ${camOn ? 'camera' : 'scroll/arrows'}<br>` +
       `silhouette ${size}<br>baseline ${baseline ?? 'calculating…'}<br>` +
-      `target ${target.toFixed(2)} · walk ${progress.toFixed(2)}<br>route ${ROUTE}`;
+      `target ${target.toFixed(2)} · walk ${progress.toFixed(2)}<br>route ${ROUTE}` +
+      (lastError ? `<br>error: ${lastError}` : '');
   }
   requestAnimationFrame(frame);
 }
