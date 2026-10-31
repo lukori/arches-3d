@@ -14,15 +14,17 @@ Live: https://lukori.github.io/arches-3d/
 
 ## Rooms and the head turn
 
+The side room is strong pink with a white hamsa silhouette on its back wall. Both come from the Ezeh Mazal site: hero colour `#f5124c`, and the hamsa traced from `design/images/hero-hamsa.png` into `hamsa.png`. The walls have a little self-light so the pink stays as bright as on the site. In code and URL it's still called `yellow` (`inYellow`, `?route=yellow`).
+
 - The walk goes straight down the corridor into the pink end room.
 - **Gray (lavender) hall = slow zone.** `grayHold` (0.3) of the whole walk is squeezed into the 1.7 m around the side door, so stepping forward or back there barely moves you while you turn your head. Natural share would be about 0.07.
-- **Look right to go in.** In the gray hall a face tracker (MediaPipe Face Landmarker, loaded after the camera starts) measures head turn. Turned right more than `turnAngle` (25°) for `holdTime` (0.5 s) switches to the branch into the yellow room. Walking closer then moves you into the room.
+- **Look right to go in.** In the gray hall a face tracker (MediaPipe Face Landmarker, loaded after the camera starts) measures head turn. Turned right more than `turnAngle` (25°) for `holdTime` (0.5 s) switches to the branch into the pink side room. Walking closer then moves you into the room.
 - While you're in the gray hall the view turns a little with your head (`lookFollow` 0.5), so you see the doorway as you look at it.
 - Stepping back out of the gray hall (toward the entrance) returns to the corridor.
 - Face detection only runs in the gray hall, about 10 times a second. It's the heaviest part, so check fps there in `?debug`.
 - If looking right is read as left, set `turnSign` to -1.
 - Without a camera: ↑/↓ walk, hold → to "look right".
-- `?route=yellow` goes into the yellow room without the head turn (for testing).
+- `?route=yellow` goes into the pink side room without the head turn (for testing).
 
 To add a room: build it in "The building", open a doorway with `archWall`, add a branch curve, and decide what switches to it.
 

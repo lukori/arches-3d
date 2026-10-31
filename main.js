@@ -233,18 +233,22 @@ box(5.6, 7, 0.2, mat('#f2cdc6'), 0, 3.5, END_Z - 5.1);
   scene.add(led);
 }
 
-// 6. Yellow side room (through the doorway on the right of the lavender hall)
+// 6. Pink side room (through the doorway on the right of the lavender hall).
+// Pink and hamsa from the Ezeh Mazal site (hero colour #f5124c, hero-hamsa photo traced to hamsa.png)
 {
-  const m = mat('#f4d35e');
+  const m = mat('#f5124c', { emissive: '#f5124c', emissiveIntensity: 0.25 });   // a little self-light keeps it as bright as the site
   box(6.2, 7.5, 0.2, m, 5.4, 3.75, -0.5);   // near wall
   box(6.2, 7.5, 0.2, m, 5.4, 3.75, -4.0);   // far wall
   box(0.2, 7.5, 3.7, m, 8.5, 3.75, -2.25);  // end wall
   box(6.2, 0.2, 3.7, m, 5.4, 7.6, -2.25);   // ceiling
-  const glow = new THREE.Mesh(new THREE.ShapeGeometry(archShape(1.8, 3.0), 32),
-    mat('#ffffff', { emissive: '#fff6dc', emissiveIntensity: 1.6 }));
-  glow.rotation.y = -Math.PI / 2;
-  glow.position.set(8.39, 0, -2.25);
-  scene.add(glow);
+  const tex = new THREE.TextureLoader().load('hamsa.png?v=1');
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const H = 2.6, W = H * 839 / 1024;           // hamsa.png is 839×1024
+  const hamsa = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
+    mat('#ffffff', { map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.6, alphaTest: 0.5 }));
+  hamsa.rotation.y = -Math.PI / 2;
+  hamsa.position.set(8.39, 0.5 + H / 2, -2.25);
+  scene.add(hamsa);
   const doorLED = archLED(1.6, 2.7);
   doorLED.rotation.y = -Math.PI / 2;
   doorLED.position.set(2.41, 0, -2.25);
@@ -276,7 +280,7 @@ roomLight('#f3eaff', 14, 0, 6.5, -2.2);                       // lavender hall
 roomLight('#fff3d0', 14, 0, 5.6, -5.6);                       // yellow hall
 roomLight('#fff4ea', 6, 0, 4.5, (RING_START + END_Z) / 2, false); // rainbow corridor fill
 roomLight('#ffd9d2', 30, 0, 5.5, END_Z - 2.5);                // end room
-roomLight('#fff0c0', 20, 5.4, 6.5, -2.25);                    // yellow room
+roomLight('#fff4f4', 20, 5.4, 6.5, -2.25);                    // pink side room
 
 // ---------- Camera paths ----------
 // The walk (0–1) moves straight down the corridor. In the lavender (gray) hall a wide part of the walk
