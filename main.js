@@ -280,7 +280,7 @@ roomLight('#f3eaff', 14, 0, 6.5, -2.2);                       // lavender hall
 roomLight('#fff3d0', 14, 0, 5.6, -5.6);                       // yellow hall
 roomLight('#fff4ea', 6, 0, 4.5, (RING_START + END_Z) / 2, false); // rainbow corridor fill
 roomLight('#ffd9d2', 30, 0, 5.5, END_Z - 2.5);                // end room
-roomLight('#fff4f4', 20, 5.4, 6.5, -2.25);                    // pink side room
+roomLight('#ffffff', 30, 5.4, 6.5, -2.25);                    // pink side room
 
 // ---------- Camera paths ----------
 // The walk (0–1) moves straight down the corridor. In the lavender (gray) hall a wide part of the walk
